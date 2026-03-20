@@ -182,3 +182,4 @@ Accessible from the **Profile** nav tab or clicking your username:
 ### Auto stats refresh
 After each game finishes, player stats are automatically refreshed from the server so Profile always shows current numbers.
 # price-royale
+# price-royale
