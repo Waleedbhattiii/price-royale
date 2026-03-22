@@ -345,8 +345,8 @@ async function runNextRound(io, room) {
   timers.set(room.id, { roundTimer, tickInterval });
 }
 
-function endGame(io, room) {
-  const { scoreboard, winner } = finishGame(room);
+async function endGame(io, room) {
+  const { scoreboard, winner } = await finishGame(room);
   io.to(room.id).emit('game:finished', { scoreboard, winner, rounds: room.rounds_data });
   const t = timers.get(room.id);
   if (t?.roundTimer) clearTimeout(t.roundTimer);

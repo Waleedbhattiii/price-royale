@@ -282,20 +282,33 @@ async function settleQRRound() {
   return { round: state.currentRound, asset: state.currentAsset, entryPrice, exitPrice, correctDirection: roundDirection, results };
 }
 
-function endGame() {
+async function endGame() {
   state.phase = QR_PHASE.FINISHED;
   const scoreboard = getQRScoreboard();
   state.winner = scoreboard[0] || null;
 
-  // Persist stats
+  // Await all stat saves — this was the bug causing progress not to persist
+  const saves = [];
   for (const player of state.players.values()) {
     const user = getUserById(player.userId);
     if (!user) continue;
     const correct = player.predictions.filter(p => p.correct).length;
     const won = player.userId === state.winner?.userId;
-    updateUserStats(player.userId, { pointsEarned: player.points, won, correct, total: player.predictions.length, streak: player.bestStreak });
-    addGameToHistory(player.userId, { roomId: QUICK_ROYALE_ID, roomName: 'Quick Royale', date: Date.now(), points: player.points, rank: scoreboard.find(s => s.userId === player.userId)?.rank, totalPlayers: state.players.size, won, rounds: state.totalRounds });
+    saves.push(
+      updateUserStats(player.userId, {
+        pointsEarned: player.points, won, correct,
+        total: player.predictions.length, streak: player.bestStreak
+      }),
+      addGameToHistory(player.userId, {
+        roomId: QUICK_ROYALE_ID, roomName: 'Quick Royale',
+        date: Date.now(), points: player.points,
+        rank: scoreboard.find(s => s.userId === player.userId)?.rank,
+        totalPlayers: state.players.size, won, rounds: state.totalRounds
+      })
+    );
   }
+  await Promise.all(saves);
+  console.log(`[QuickRoyale] Stats saved for ${saves.length / 2} players`);
 
   broadcast('qr:gameFinished', { scoreboard, winner: state.winner });
 

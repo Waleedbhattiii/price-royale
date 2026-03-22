@@ -231,41 +231,44 @@ export function getScoreboard(room) {
 }
 
 // ─── Finish game & persist stats ───────────────────────────────────────────────
-export function finishGame(room) {
+export async function finishGame(room) {
   room.status = ROOM_STATUS.FINISHED;
   room.finishedAt = Date.now();
 
   const scoreboard = getScoreboard(room);
   const winner = scoreboard[0];
 
-  // Persist stats for each player
+  // Await all stat saves so DB is written before function returns
+  const saves = [];
   for (const player of room.players.values()) {
     const user = getUserById(player.userId);
-    if (!user) continue; // guest/anon
+    if (!user) continue;
 
     const correct = player.predictions.filter(p => p.correct).length;
     const total = player.predictions.length;
     const won = player.userId === winner?.userId;
 
-    updateUserStats(player.userId, {
-      pointsEarned: player.points,
-      won,
-      correct,
-      total,
-      streak: player.bestStreak,
-    });
-
-    addGameToHistory(player.userId, {
-      roomId: room.id,
-      roomName: room.name,
-      date: room.finishedAt,
-      points: player.points,
-      rank: scoreboard.find(s => s.userId === player.userId)?.rank,
-      totalPlayers: room.players.size,
-      won,
-      rounds: room.rounds,
-    });
+    saves.push(
+      updateUserStats(player.userId, {
+        pointsEarned: player.points,
+        won, correct, total,
+        streak: player.bestStreak,
+      }),
+      addGameToHistory(player.userId, {
+        roomId: room.id,
+        roomName: room.name,
+        date: room.finishedAt,
+        points: player.points,
+        rank: scoreboard.find(s => s.userId === player.userId)?.rank,
+        totalPlayers: room.players.size,
+        won,
+        rounds: room.rounds,
+      })
+    );
   }
+
+  await Promise.all(saves);
+  console.log(`[Room] Stats saved for ${saves.length / 2} players`);
 
   return { scoreboard, winner };
 }

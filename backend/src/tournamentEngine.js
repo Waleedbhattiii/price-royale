@@ -269,14 +269,17 @@ export async function runTournament(t) {
   t.status = TOURNAMENT_STATUS.FINISHED;
   t.finishedAt = Date.now();
 
-  // Persist win for champion
+  // Await stat saves for champion
   if (t.winner) {
-    updateUserStats(t.winner.userId, { pointsEarned: 500, won: true, correct: 0, total: 0, streak: 0 });
-    addGameToHistory(t.winner.userId, {
-      roomId: t.id, roomName: `Tournament: ${t.name}`,
-      date: t.finishedAt, points: 500, rank: 1,
-      totalPlayers: t.players.size, won: true, rounds: t.totalRounds,
-    });
+    await Promise.all([
+      updateUserStats(t.winner.userId, { pointsEarned: 500, won: true, correct: 0, total: 0, streak: 0 }),
+      addGameToHistory(t.winner.userId, {
+        roomId: t.id, roomName: `Tournament: ${t.name}`,
+        date: t.finishedAt, points: 500, rank: 1,
+        totalPlayers: t.players.size, won: true, rounds: t.totalRounds,
+      })
+    ]);
+    console.log(`[Tournament] Stats saved for winner: ${t.winner.displayName}`);
   }
 
   tBroadcast(t.id, 'tournament:finished', { winner: t.winner, bracket: t.bracket.map(r => r.map(serializeMatch)) });
@@ -372,7 +375,10 @@ async function runMatch(t, match) {
   }
   if (winner) {
     const winnerPlayer = t.players.get(winner.userId);
-    if (winnerPlayer) { winnerPlayer.wins += 1; updateUserStats(winner.userId, { pointsEarned: 100, won: false, correct: 1, total: 1, streak: 0 }); }
+    if (winnerPlayer) {
+      winnerPlayer.wins += 1;
+      await updateUserStats(winner.userId, { pointsEarned: 100, won: false, correct: 1, total: 1, streak: 0 });
+    }
   }
 
   tBroadcast(t.id, 'tournament:matchResult', {
