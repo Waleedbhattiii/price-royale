@@ -83,7 +83,7 @@ app.get('/auth/discord/callback', async (req, res) => {
   try {
     const result = await handleDiscordCallback(code);
     // Redirect to frontend with token in URL param (frontend stores in localStorage)
-    res.redirect(`${FRONTEND_URL}/auth/discord?token=${result.token}&new=${result.isNew}`);
+    res.redirect(`${FRONTEND_URL}/?discord_token=${result.token}&new=${result.isNew}`);
   } catch (err) {
     console.error('[Discord OAuth]', err.message);
     res.redirect(`${FRONTEND_URL}?auth_error=discord_failed`);

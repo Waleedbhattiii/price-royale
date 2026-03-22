@@ -17,12 +17,12 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false));
   }, []);
 
-  // Handle Discord OAuth redirect — works for both / and /auth/discord paths
+  // Handle Discord OAuth redirect
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
+    // Check both param names for compatibility
+    const token = params.get('discord_token') || params.get('token');
     if (!token) return;
-    // Only act if this looks like a Discord callback (has token param)
     localStorage.setItem('pr_token', token);
     authApi.me().then(({ user }) => {
       setUser(user);
