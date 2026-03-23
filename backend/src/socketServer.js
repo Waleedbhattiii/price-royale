@@ -247,12 +247,12 @@ export function initSocketServer(io) {
       runTournament(t).catch(err => console.error('[Tournament] Error:', err));
     });
 
-    socket.on('tournament:commit', ({ matchId, direction }, cb) => {
+    socket.on('tournament:commit', ({ matchId, direction, currentPrice }, cb) => {
       const tId = socket.currentTournamentId;
       if (!tId) return cb?.({ ok: false, error: 'Not in a tournament' });
-      const result = commitTournamentMatch(tId, user.id, direction, matchId);
+      const result = commitTournamentMatch(tId, user.id, direction, matchId, currentPrice);
       if (!result.ok) return cb?.({ ok: false, error: result.error });
-      cb?.({ ok: true });
+      cb?.({ ok: true, personalEntryPrice: result.personalEntryPrice });
       io.to(`tournament:${tId}`).emit('tournament:commitUpdate', { matchId, userId: user.id, displayName: user.displayName });
     });
 

@@ -210,12 +210,14 @@ export default function TournamentPage({ onLeave }) {
       } catch {}
     }
 
-    socket.emit('tournament:commit', { matchId: match.id, direction }, (res) => {
+    socket.emit('tournament:commit', { matchId: match.id, direction, currentPrice }, (res) => {
       if (res?.ok) {
         myCommitRef.current = direction;
         setMyCommit(direction);
-        setMyEntryPrice(currentPrice);
-        toastRef.current?.info(`Locked: ${direction === 'UP' ? '▲ UP' : '▼ DOWN'}${currentPrice ? ` @ $${currentPrice.toFixed(2)}` : ''}`, { duration: 1800 });
+        // Use server-confirmed personal entry price if returned, else use our local fetch
+        const entryPrice = res.personalEntryPrice || currentPrice;
+        setMyEntryPrice(entryPrice);
+        toastRef.current?.info(`Locked: ${direction === 'UP' ? '▲ UP' : '▼ DOWN'}${entryPrice ? ` @ $${entryPrice.toFixed(2)}` : ''}`, { duration: 1800 });
       } else {
         toast.error(res?.error || 'Could not commit');
       }
@@ -433,6 +435,7 @@ export default function TournamentPage({ onLeave }) {
                     entryPrice={activeMatch.entryPrice}
                     personalEntryPrice={myEntryPrice}
                     showEntryLine={!!myCommit}
+                    roundStartTime={activeMatch.startedAt || Date.now()}
                   />
                 </div>
 
@@ -465,13 +468,28 @@ export default function TournamentPage({ onLeave }) {
               <div className="animate-fade">
                 <RoundResult
                   result={{
+                    // correctDirection based on round start price (for display note only)
                     correctDirection: matchResult.exitPrice > matchResult.entryPrice ? 'UP' : matchResult.exitPrice < matchResult.entryPrice ? 'DOWN' : null,
                     exitPrice: matchResult.exitPrice,
                     entryPrice: matchResult.entryPrice,
                     ciMultiplier: 1,
                     results: [
-                      { userId: matchResult.winner?.userId, correct: true, pointsEarned: 100 },
-                      { userId: matchResult.loser?.userId, correct: false, pointsEarned: 0 },
+                      {
+                        userId: matchResult.winner?.userId,
+                        correct: true,
+                        pointsEarned: 100,
+                        personalEntryPrice: matchResult.winner?.userId === user?.id
+                          ? (myEntryPrice || matchResult.p1PersonalEntry || matchResult.p2PersonalEntry)
+                          : null,
+                      },
+                      {
+                        userId: matchResult.loser?.userId,
+                        correct: false,
+                        pointsEarned: 0,
+                        personalEntryPrice: matchResult.loser?.userId === user?.id
+                          ? (myEntryPrice || matchResult.p1PersonalEntry || matchResult.p2PersonalEntry)
+                          : null,
+                      },
                     ],
                     asset: matchResult.asset,
                   }}

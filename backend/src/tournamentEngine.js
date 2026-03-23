@@ -323,6 +323,7 @@ async function runMatch(t, match) {
     asset: match.asset,
     entryPrice: match.entryPrice,
     duration: ROUND_DURATION,
+    startedAt: Date.now(),
   });
 
   // Commit phase
@@ -344,8 +345,18 @@ async function runMatch(t, match) {
   const p1Pred = p1?.predictions?.find(pr => pr.matchId === match.id);
   const p2Pred = p2?.predictions?.find(pr => pr.matchId === match.id);
 
-  const p1Correct = p1Pred && ((p1Pred.direction === 'UP' && priceWentUp) || (p1Pred.direction === 'DOWN' && priceWentDown));
-  const p2Correct = p2Pred && ((p2Pred.direction === 'UP' && priceWentUp) || (p2Pred.direction === 'DOWN' && priceWentDown));
+  // Judge each player against THEIR personal entry price (price at commit time)
+  // This matches the same logic used in roomEngine and quickRoyale
+  const p1PersonalEntry = p1Pred?.personalEntryPrice || match.entryPrice;
+  const p2PersonalEntry = p2Pred?.personalEntryPrice || match.entryPrice;
+
+  const p1PersonalUp   = match.exitPrice > p1PersonalEntry;
+  const p1PersonalDown = match.exitPrice < p1PersonalEntry;
+  const p2PersonalUp   = match.exitPrice > p2PersonalEntry;
+  const p2PersonalDown = match.exitPrice < p2PersonalEntry;
+
+  const p1Correct = p1Pred && ((p1Pred.direction === 'UP' && p1PersonalUp) || (p1Pred.direction === 'DOWN' && p1PersonalDown));
+  const p2Correct = p2Pred && ((p2Pred.direction === 'UP' && p2PersonalUp) || (p2Pred.direction === 'DOWN' && p2PersonalDown));
 
   let winner, loser, result;
 
@@ -390,11 +401,13 @@ async function runMatch(t, match) {
     asset: match.asset,
     p1Direction: p1Pred?.direction || null,
     p2Direction: p2Pred?.direction || null,
+    p1PersonalEntry: p1PersonalEntry,
+    p2PersonalEntry: p2PersonalEntry,
   });
 }
 
 // Called from socketServer when a player commits in tournament
-export function commitTournamentMatch(tournamentId, userId, direction, matchId) {
+export function commitTournamentMatch(tournamentId, userId, direction, matchId, currentPrice) {
   const t = tournaments.get(tournamentId);
   if (!t) return { ok: false, error: 'Tournament not found' };
   const player = t.players.get(userId);
@@ -402,8 +415,17 @@ export function commitTournamentMatch(tournamentId, userId, direction, matchId) 
   if (!player.predictions) player.predictions = [];
   const already = player.predictions.find(p => p.matchId === matchId);
   if (already) return { ok: false, error: 'Already committed' };
-  player.predictions.push({ matchId, direction, ts: Date.now() });
-  return { ok: true };
+
+  // Find match to get round entry price as fallback
+  let matchEntryPrice = 0;
+  for (const round of t.bracket || []) {
+    const m = round.find(m => m.id === matchId);
+    if (m) { matchEntryPrice = m.entryPrice || 0; break; }
+  }
+
+  const personalEntryPrice = currentPrice || matchEntryPrice;
+  player.predictions.push({ matchId, direction, ts: Date.now(), personalEntryPrice });
+  return { ok: true, personalEntryPrice };
 }
 
 function serializeMatch(m) {
