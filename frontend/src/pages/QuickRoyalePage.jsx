@@ -330,6 +330,7 @@ export default function QuickRoyalePage({ onLeave }) {
                 entryPrice={round.entryPrice}
                 personalEntryPrice={myEntryPrice}
                 showEntryLine={!!myCommit}
+                roundStartTime={round.startedAt || Date.now()}
               />
 
               <div className="card qrl-predict">

@@ -210,6 +210,7 @@ async function runNextRound() {
     duration: state.roundDuration,
     commitWindow: COMMIT_WINDOW,
     scoreboard: getQRScoreboard(),
+    startedAt: Date.now(),
   });
 
   let remaining = state.roundDuration;

@@ -151,7 +151,7 @@ export default function GamePage({ game, onLeave }) {
               </div>
 
               {/* Chart */}
-              <PriceChart key={`${roundData.round}-${roundData.asset}`} asset={roundData.asset} entryPrice={roundData.entryPrice} personalEntryPrice={myEntryPrice} showEntryLine={!!myCommit} />
+              <PriceChart key={`${roundData.round}-${roundData.asset}`} asset={roundData.asset} entryPrice={roundData.entryPrice} personalEntryPrice={myEntryPrice} showEntryLine={!!myCommit} roundStartTime={roundData.startedAt || Date.now()} />
 
               {/* Prediction buttons */}
               {gamePhase === 'commit' && (

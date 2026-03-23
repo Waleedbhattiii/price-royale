@@ -311,6 +311,7 @@ async function runNextRound(io, room) {
     round: room.currentRound, totalRounds: room.rounds, asset, entryPrice,
     duration: room.roundDuration, commitWindow: COMMIT_WINDOW_SECONDS,
     deadline: room.commitDeadline, scoreboard: getScoreboard(room),
+    startedAt: Date.now(),
   });
 
   let remaining = room.roundDuration;

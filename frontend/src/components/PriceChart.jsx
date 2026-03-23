@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { pricesApi } from '../lib/client.js';
 
-export default function PriceChart({ asset, entryPrice, personalEntryPrice, showEntryLine }) {
+export default function PriceChart({ asset, entryPrice, personalEntryPrice, showEntryLine, roundStartTime }) {
   const containerRef = useRef(null);
   const chartRef = useRef(null);
   const seriesRef = useRef(null);
@@ -63,14 +63,20 @@ export default function PriceChart({ asset, entryPrice, personalEntryPrice, show
       ro.observe(containerRef.current);
       roRef.current = ro;
 
-      // Load history
+      // Load history — only from round start time so chart shows current round only
       pricesApi.history(asset).then(history => {
         if (!history?.length || destroyed || !seriesRef.current) return;
+
         const seen = new Set();
+        // roundStartTime prop tells us where to cut — only show data from this round
+        const cutoff = roundStartTime ? roundStartTime - 5000 : 0; // 5s buffer before round
+
         const data = history
+          .filter(p => !cutoff || p.t >= cutoff)
           .map(p => ({ time: Math.floor(p.t / 1000), value: p.price }))
           .filter(d => { if (seen.has(d.time)) return false; seen.add(d.time); return true; })
           .sort((a, b) => a.time - b.time);
+
         if (data.length && seriesRef.current) {
           seriesRef.current.setData(data);
           chartRef.current?.timeScale().fitContent();
