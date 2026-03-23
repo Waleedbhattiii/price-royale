@@ -35,7 +35,12 @@ export default function PriceChart({ asset, entryPrice, personalEntryPrice, show
         },
         crosshair: { mode: CrosshairMode.Normal },
         rightPriceScale: { borderColor: 'rgba(56,189,248,0.15)', textColor: '#94A3B8' },
-        timeScale: { borderColor: 'rgba(56,189,248,0.15)', textColor: '#94A3B8', timeVisible: true },
+        timeScale: {
+          borderColor: 'rgba(56,189,248,0.15)',
+          textColor: '#94A3B8',
+          timeVisible: true,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, // user's local timezone
+        },
         handleScroll: false,
         handleScale: false,
       });
