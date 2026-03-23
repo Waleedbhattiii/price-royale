@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { pricesApi } from '../lib/client.js';
 
-export default function PriceChart({ asset, entryPrice, personalEntryPrice, showEntryLine, roundStartTime }) {
+export default function PriceChart({ asset, entryPrice, personalEntryPrice, showEntryLine, roundStartTime, roundDuration = 60 }) {
   const containerRef = useRef(null);
   const chartRef = useRef(null);
   const seriesRef = useRef(null);
@@ -24,7 +24,7 @@ export default function PriceChart({ asset, entryPrice, personalEntryPrice, show
 
       chart = createChart(containerRef.current, {
         width: containerRef.current.clientWidth,
-        height: 200,
+        height: 260,
         layout: {
           background: { type: ColorType.Solid, color: 'transparent' },
           textColor: '#475569',
@@ -57,6 +57,17 @@ export default function PriceChart({ asset, entryPrice, personalEntryPrice, show
       chartRef.current = chart;
       seriesRef.current = series;
 
+      // Lock the visible time window from round start to round end + buffer
+      // Called once on load and re-applied on every tick so window never drifts
+      function applyRoundWindow() {
+        if (!chartRef.current || !roundStartTime) return;
+        const fromSec = Math.floor((roundStartTime - 20000) / 1000); // 20s before round
+        const toSec   = Math.floor((roundStartTime + (roundDuration + 20) * 1000) / 1000); // round end + 20s
+        try {
+          chartRef.current.timeScale().setVisibleRange({ from: fromSec, to: toSec });
+        } catch {}
+      }
+
       // ResizeObserver
       const ro = new ResizeObserver(entries => {
         for (const entry of entries) {
@@ -68,13 +79,12 @@ export default function PriceChart({ asset, entryPrice, personalEntryPrice, show
       ro.observe(containerRef.current);
       roRef.current = ro;
 
-      // Load history — only from round start time so chart shows current round only
+      // Load history — show 30s before round start for context
       pricesApi.history(asset).then(history => {
         if (!history?.length || destroyed || !seriesRef.current) return;
 
         const seen = new Set();
-        // roundStartTime prop tells us where to cut — only show data from this round
-        const cutoff = roundStartTime ? roundStartTime - 5000 : 0; // 5s buffer before round
+        const cutoff = roundStartTime ? roundStartTime - 30000 : 0;
 
         const data = history
           .filter(p => !cutoff || p.t >= cutoff)
@@ -84,7 +94,7 @@ export default function PriceChart({ asset, entryPrice, personalEntryPrice, show
 
         if (data.length && seriesRef.current) {
           seriesRef.current.setData(data);
-          chartRef.current?.timeScale().fitContent();
+          applyRoundWindow();
         }
       }).catch(() => {});
     });
@@ -149,8 +159,12 @@ export default function PriceChart({ asset, entryPrice, personalEntryPrice, show
         const base = personalEntryPrice || entryPrice;
         if (base) setPriceChange(((p.price - base) / base) * 100);
 
-        if (chartRef.current) {
-          try { chartRef.current.timeScale().scrollToRealTime(); } catch {}
+        // Re-lock the window every tick — prevents the chart from auto-scrolling
+        // and keeps the full round visible from start to end
+        if (chartRef.current && roundStartTime) {
+          const fromSec = Math.floor((roundStartTime - 20000) / 1000);
+          const toSec   = Math.floor((roundStartTime + (roundDuration + 20) * 1000) / 1000);
+          try { chartRef.current.timeScale().setVisibleRange({ from: fromSec, to: toSec }); } catch {}
         }
       } catch {}
     }
