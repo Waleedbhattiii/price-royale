@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { authApi, connectSocket, disconnectSocket } from '../lib/client.js';
+import { authApi, connectSocket, disconnectSocket, getSocket } from '../lib/client.js';
 
 const AuthContext = createContext(null);
 
@@ -20,7 +20,6 @@ export function AuthProvider({ children }) {
   // Handle Discord OAuth redirect
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    // Check both param names for compatibility
     const token = params.get('discord_token') || params.get('token');
     if (!token) return;
     localStorage.setItem('pr_token', token);
@@ -35,6 +34,25 @@ export function AuthProvider({ children }) {
       setLoading(false);
     });
   }, []);
+
+  // For guests — keep user.id in sync with socket.id
+  // Server assigns guest ID as `guest_${socket.id}` so we must match it
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+
+    const syncGuestId = () => {
+      setUser(prev => {
+        if (!prev?.isGuest) return prev;
+        const newId = `guest_${socket.id}`;
+        if (prev.id === newId) return prev; // no change needed
+        return { ...prev, id: newId };
+      });
+    };
+
+    socket.on('connect', syncGuestId);
+    return () => socket.off('connect', syncGuestId);
+  }, [user?.isGuest]);
 
   const login = useCallback(async (credentials) => {
     const { token, user } = await authApi.login(credentials);
@@ -59,11 +77,23 @@ export function AuthProvider({ children }) {
   }, []);
 
   const loginAsGuest = useCallback((guestName) => {
-    connectSocket(null, guestName);
+    const socket = connectSocket(null, guestName);
+
+    // Set user immediately with null ID — UI renders right away
     setUser({ id: null, displayName: guestName, isGuest: true, stats: {}, badges: [], gameHistory: [] });
+
+    // Once socket connects, update ID to match server's guest_${socket.id}
+    const onConnect = () => {
+      setUser({ id: `guest_${socket.id}`, displayName: guestName, isGuest: true, stats: {}, badges: [], gameHistory: [] });
+    };
+
+    if (socket.connected) {
+      onConnect();
+    } else {
+      socket.once('connect', onConnect);
+    }
   }, []);
 
-  // Refresh user data from server (e.g. after a game ends to get updated stats)
   const refreshUser = useCallback(async () => {
     const token = localStorage.getItem('pr_token');
     if (!token) return;
