@@ -41,25 +41,36 @@ export function initSocketServer(io) {
   io.on('connection', async (socket) => {
     const user = socket.user;
 
-    // Handle reconnection — transfer room membership from old socket to new one
+    // Handle reconnection — transfer room/game membership from old socket to new one
     if (!user.isGuest) {
       const prevSocketId = userSockets.get(user.id);
       if (prevSocketId && prevSocketId !== socket.id) {
         const prevSocket = io.sockets.sockets.get(prevSocketId);
         if (prevSocket) {
-          // Transfer room state — AWAIT socket.join (it's async in socket.io v4)
+          // Transfer custom room membership
           if (prevSocket.currentRoomId) {
             socket.currentRoomId = prevSocket.currentRoomId;
             socket.currentMode = prevSocket.currentMode || 'room';
             await socket.join(prevSocket.currentRoomId);
             console.log(`[Socket] Transferred room ${prevSocket.currentRoomId} to new socket for ${user.displayName}`);
           }
+          // Transfer tournament membership
           if (prevSocket.currentTournamentId) {
             socket.currentTournamentId = prevSocket.currentTournamentId;
+            socket.currentMode = 'tournament';
             await socket.join(`tournament:${prevSocket.currentTournamentId}`);
+          }
+          // Transfer Quick Royale membership
+          if (prevSocket.currentMode === 'quickroyale') {
+            socket.currentMode = 'quickroyale';
+            await socket.join('quick-royale');
+            console.log(`[Socket] Transferred Quick Royale to new socket for ${user.displayName}`);
+            // Re-check autostart in case countdown should fire
+            checkAutoStart();
           }
           prevSocket.currentRoomId = null;
           prevSocket.currentTournamentId = null;
+          prevSocket.currentMode = null;
           prevSocket.disconnect(true);
         }
       }
@@ -151,10 +162,10 @@ export function initSocketServer(io) {
     });
 
     // ── Quick Royale ──────────────────────────────────────────────────────────
-    socket.on('qr:join', (_, cb) => {
+    socket.on('qr:join', async (_, cb) => {
       const result = joinQuickRoyale(user.id, user.displayName, user.avatar);
       if (!result.ok) return cb?.({ ok: false, error: result.error });
-      socket.join('quick-royale');
+      await socket.join('quick-royale');
       socket.currentMode = 'quickroyale';
       checkAutoStart();
       cb?.({ ok: true, state: serializeQRState() });
