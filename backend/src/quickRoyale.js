@@ -6,7 +6,7 @@ import { updateUserStats, addGameToHistory, getUserById } from './authService.js
 
 const QUICK_ROYALE_ID = 'QUICK';
 const MIN_PLAYERS = 2;
-const COUNTDOWN_SECONDS = 15; // countdown before auto-start after min players reached
+const COUNTDOWN_SECONDS = 10; // countdown before auto-start after min players reached
 const ROUNDS = 5;
 const ROUND_DURATION = 60;
 const COMMIT_WINDOW = 30; // first 30s: commit phase. rest: watch phase.
@@ -182,7 +182,7 @@ async function startGame() {
     p.points = 0; p.streak = 0; p.bestStreak = 0; p.predictions = [];
   }
   broadcast('qr:gameStarting', { totalRounds: state.totalRounds, playerCount: state.players.size });
-  await delay(2000);
+  await delay(500); // short pause so clients receive gameStarting before round:start
   runNextRound();
 }
 
@@ -190,11 +190,12 @@ async function runNextRound() {
   state.currentRound += 1;
   if (state.currentRound > state.totalRounds) return endGame();
 
-  // Pick random asset
   const assets = ['ETH/USD', 'BTC/USD', 'SOL/USD'];
   state.currentAsset = assets[Math.floor(Math.random() * assets.length)];
 
-  await fetchLatestPrices();
+  // Use cached prices immediately — don't block round start on a network call
+  // Trigger a background refresh so next round has fresh data
+  fetchLatestPrices().catch(() => {});
   const prices = getLatestPrices();
   const entryPrice = prices[state.currentAsset]?.price || 0;
 
@@ -233,7 +234,7 @@ async function runNextRound() {
     const settlement = await settleQRRound();
     broadcast('qr:roundResult', { ...settlement, scoreboard: getQRScoreboard() });
 
-    await delay(5000);
+    await delay(3000); // show result screen for 3 seconds then next round
     runNextRound();
   }, state.roundDuration * 1000);
 }

@@ -281,14 +281,13 @@ async function startGame(io, room) {
   room.startedAt = Date.now();
   room.currentRound = 0;
 
-  // Broadcast to room channel
   io.to(room.id).emit('game:starting', {
     totalRounds: room.rounds,
     players: Array.from(room.players.values()).map(p => ({ userId: p.userId, displayName: p.displayName, avatar: p.avatar }))
   });
 
   // Wait for clients to process game:starting before first round
-  await delay(2000);
+  await delay(500);
   await runNextRound(io, room);
 }
 
@@ -300,7 +299,8 @@ async function runNextRound(io, room) {
   const asset = pickAsset(room);
   room.currentAsset = asset;
   let entryPrice = 0;
-  try { await fetchLatestPrices(); entryPrice = getLatestPrices()[asset]?.price || 0; } catch {}
+  // Use cached prices immediately — background fetch keeps them fresh
+  try { fetchLatestPrices().catch(() => {}); entryPrice = getLatestPrices()[asset]?.price || 0; } catch {}
 
   room.rounds_data.push({ round: room.currentRound, asset, entryPrice, startedAt: Date.now(), exitPrice: null, correctDirection: null, results: [], settledAt: null });
   room.status = ROOM_STATUS.COMMIT;
@@ -335,7 +335,7 @@ async function runNextRound(io, room) {
     let settlement;
     try { settlement = await settleRound(room); } catch { settlement = { correctDirection: null, entryPrice, exitPrice: entryPrice, ciMultiplier: 1, results: [] }; }
     io.to(room.id).emit('round:result', { round: room.currentRound, asset, entryPrice, exitPrice: settlement.exitPrice, correctDirection: settlement.correctDirection, ciMultiplier: settlement.ciMultiplier, results: settlement.results, scoreboard: getScoreboard(room) });
-    await delay(5000);
+    await delay(3000); // show result for 3s then next round
     if (room.currentRound < room.rounds) await runNextRound(io, room);
     else endGame(io, room);
   }, room.roundDuration * 1000);
